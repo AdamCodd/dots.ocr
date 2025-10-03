@@ -1,42 +1,53 @@
 import argparse
 import os
-
-from openai import OpenAI
-from transformers.utils.versions import require_version
+import sys
 from PIL import Image
-import io
-import base64
 from dots_ocr.utils import dict_promptmode_to_prompt
 from dots_ocr.model.inference import inference_with_vllm
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--ip", type=str, default="localhost")
-parser.add_argument("--port", type=str, default="8000")
-parser.add_argument("--model_name", type=str, default="model")
-parser.add_argument("--prompt_mode", type=str, default="prompt_layout_all_en")
+parser = argparse.ArgumentParser(description="Run dots_ocr demo against a local vLLM server")
+parser.add_argument("--ip", type=str, default="localhost", help="vLLM server ip")
+parser.add_argument("--port", type=str, default="8000", help="vLLM server port")
+parser.add_argument("--model_name", type=str, default="model", help="model name on the server")
+parser.add_argument("--prompt_mode", type=str, default="prompt_layout_all_en", help="key into dict_promptmode_to_prompt")
+parser.add_argument("--image", type=str, default="demo/demo_image1.jpg", help="path to input image")
+parser.add_argument("--timeout", type=int, default=60, help="request timeout seconds")
 
 args = parser.parse_args()
 
-require_version("openai>=1.5.0", "To fix: pip install openai>=1.5.0")
-
-
 def main():
-    addr = f"http://{args.ip}:{args.port}/v1"
-    image_path = "demo/demo_image1.jpg"
-    prompt = dict_promptmode_to_prompt[args.prompt_mode]
-    image = Image.open(image_path)
+    if not os.path.exists(args.image):
+        print(f"ERROR: image not found: {args.image}", file=sys.stderr)
+        sys.exit(2)
+
+    prompt = dict_promptmode_to_prompt.get(args.prompt_mode)
+    if prompt is None:
+        print(f"ERROR: unknown prompt_mode '{args.prompt_mode}'. Available keys: {list(dict_promptmode_to_prompt.keys())}", file=sys.stderr)
+        sys.exit(3)
+
+    try:
+        image = Image.open(args.image).convert("RGB")
+    except Exception as e:
+        print(f"ERROR: failed to open image {args.image}: {e}", file=sys.stderr)
+        sys.exit(4)
+
     response = inference_with_vllm(
         image,
-        prompt, 
+        prompt,
         ip=args.ip,
         port=args.port,
         temperature=0.1,
         top_p=0.9,
         model_name=args.model_name,
+        timeout_seconds=args.timeout,
     )
-    print(f"response: {response}")
 
+    if response is None:
+        print("No response (request error).", file=sys.stderr)
+        sys.exit(5)
+
+    print("response:")
+    print(response)
 
 if __name__ == "__main__":
     main()
