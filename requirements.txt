@@ -3,7 +3,7 @@ gradio
 gradio_image_annotation
 PyMuPDF
 qwen_vl_utils
-transformers==4.51.3
+transformers
 huggingface_hub
 modelscope
 flash-attn==2.8.0.post2
